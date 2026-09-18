@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Finch Sandbox</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='88'%3E%F0%9F%90%A6%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt-stdlib.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+  <!-- Autocomplete (d-28): the popup of Finch methods and names as she types -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo">🐦</span> Finch Sandbox</div>
+    <nav class="sections">
+      <button type="button" class="section active" data-section="programs">Programs</button>
+      <button type="button" class="section" data-section="floors" title="Build and edit floors">Floors</button>
+      <button type="button" class="section" data-section="runs" title="Every run, replayed — and the gallery of drawings">Runs</button>
+      <button type="button" class="section" data-section="workbook" title="The BirdBrain lesson series — attach a program and floor to each exercise and tick it off">Workbook</button>
+      <button type="button" class="section" data-section="classes" title="Your classes — create one as a teacher, or join one with the code your teacher gave you">Classes</button>
+    </nav>
+    <div class="profile">
+      <span id="profile-swatch" class="swatch"></span>
+      <select id="profile-select" title="Profile"></select>
+      <button type="button" id="profile-new" title="Create another profile (no password needed)">+ Profile</button>
+      <!-- Delete a profile (itch-19, d-40): the selected one, with everything in it -->
+      <button type="button" id="profile-delete" title="Delete the selected profile and everything in it">− Profile</button>
+      <!-- Account (itch-13): "Sign in" for an anonymous user, the username once signed in -->
+      <button type="button" id="account" class="account-btn" title="Sign in or create an account">Sign in</button>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <!-- Account dialog (itch-13): sign in, create an account for this computer, take one profile to
+       your own account; once signed in, sign out or claim an older profile. public/js/account.js -->
+  <dialog id="account-dialog" class="account-dialog">
+    <div class="pane-title"><span class="account-title">Your account</span><button type="button" class="account-close">Close</button></div>
+    <div class="account-msg" hidden></div>
+    <div class="account-anon">
+      <form class="account-form">
+        <label>Username <input type="text" name="username" autocomplete="username" maxlength="32" required></label>
+        <label>Password <input type="password" name="password" autocomplete="current-password" minlength="6" maxlength="128" required></label>
+        <div class="account-actions">
+          <button type="submit" value="signin" class="primary" title="Switch this computer to your account">Sign in</button>
+          <button type="submit" value="register" title="Every profile on this computer becomes yours, and you can sign in to them from anywhere">Create an account for this computer</button>
+          <button type="submit" value="split" title="Only this profile moves to your own account; the other profiles stay on this computer">Take “<span class="split-name">this profile</span>” to my own account</button>
+        </div>
+        <div class="account-note muted">No email needed. If you forget your password, a teacher of one of your classes can set a new one; otherwise write it down somewhere safe.</div>
+      </form>
+    </div>
+    <div class="account-signed" hidden>
+      <div class="account-legacy-wrap" hidden>
+        <div class="account-subtitle">Older profiles you can claim</div>
+        <div class="account-legacy"></div>
+      </div>
+      <div class="account-actions"><button type="button" class="account-signout" title="Leave your account on this computer">Sign out</button></div>
+    </div>
+  </dialog>
+
+  <main class="workspace">
+    <section id="code-pane" class="code-pane">
+      <!-- Read-only viewer (itch-15, d-34): an assignment starter, a published resource or a student's
+           draft, run in place without copying. Nothing typed or run here is saved. -->
+      <div id="viewer-bar" class="viewer-bar" hidden>
+        <span id="viewer-label"></span>
+        <button type="button" id="viewer-exit" title="Back to your own program">Exit</button>
+      </div>
+      <div class="program-bar">
+        <input id="program-name" class="program-name" placeholder="Program name" disabled>
+        <span id="save-status" class="save-status"></span>
+      </div>
+      <div class="program-actions">
+        <button type="button" id="btn-new">New</button>
+        <button type="button" id="btn-duplicate">Duplicate</button>
+        <button type="button" id="btn-delete">Delete</button>
+        <button type="button" id="btn-download" title="Download the editor text as a .py file">Download .py</button>
+        <label class="file-button">Import .py<input type="file" id="file-import" accept=".py,text/x-python,text/plain"></label>
+        <!-- Turn in (itch-16, d-35): a snapshot of this assignment work for the teacher; shown only on assignment work -->
+        <button type="button" id="btn-turnin" class="primary" hidden title="Send your teacher a snapshot of this program as it is now; you can keep working and turn in again">Turn in</button>
+        <!-- Share (itch-18, d-39): every way to share the open program, each saying who will see it -->
+        <details id="share-menu" class="share-menu"><summary title="Duplicate, copy to another profile, turn in, send to your teacher, or publish to a class">Share…</summary><div class="share-items" role="menu"></div></details>
+        <label class="font-size">Font <select id="font-size"><option>12</option><option selected>14</option><option>16</option><option>18</option></select></label>
+      </div>
+      <div id="program-list" class="program-list"></div>
+      <div id="sandbox-warning" class="sandbox-warning" hidden></div>
+      <div class="editor-wrap">
+        <textarea id="code" spellcheck="false"></textarea>
+      </div>
+      <!-- Debugger (Milestone 5): variables and the call stack while paused or stepping, and a watch
+           expression evaluated at every halt and, while running, every tick. -->
+      <div id="debugger" class="debugger">
+        <div class="debug-bar"><span class="debug-title">Debugger</span><span id="debug-status" class="debug-status"></span></div>
+        <div class="debug-watch">
+          <label>Watch <input type="text" id="watch-expr" placeholder="bird.getLine('L') - bird.getLine('R')" spellcheck="false" autocomplete="off" title="A Python expression, evaluated at every halt and every tick"></label>
+          <span id="watch-value" class="debug-watch-value"></span>
+        </div>
+        <div class="debug-body">
+          <div class="debug-col"><h4>Variables</h4><div id="debug-vars"></div></div>
+          <div class="debug-col"><h4>Call stack</h4><div id="debug-stack"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Floors section (Milestone 2): the floor library and the floor editor's palette. The arena
+         on the right becomes the editing surface while this pane is shown. -->
+    <section id="floors-pane" class="floors-pane" hidden>
+      <div class="floor-lib">
+        <div class="pane-title">
+          <span>Floor library</span>
+          <button type="button" id="floor-new" title="A new empty 120 x 90 cm sheet of white paper in your library">New blank floor</button>
+        </div>
+        <div id="floor-list" class="floor-list"></div>
+        <div class="floor-lib-actions">
+          <button type="button" id="floor-copy" title="Make an editable copy of this floor in your library">Copy</button>
+          <button type="button" id="floor-delete" title="Delete this custom floor">Delete</button>
+          <!-- Browsing this pane only shows a floor; this button is what makes the open program run on it -->
+          <button type="button" id="floor-use" title="From now on the open program runs on this floor" disabled>Use for program</button>
+          <span id="floor-save-status" class="save-status"></span>
+        </div>
+      </div>
+      <div id="floor-locked" class="floor-locked" hidden>This is a built-in floor, so it cannot be edited. Press <b>Copy</b> to make an editable copy in your library.</div>
+      <!-- Goals (Milestone 4): what a run on this floor must achieve; the verdict shows in the console. -->
+      <div id="floor-goals" class="floor-goals"></div>
+      <div id="floor-editor" class="floor-editor">
+        <div class="floor-settings">
+          <input id="floor-name" class="program-name" placeholder="Floor name" maxlength="80">
+          <div class="control-row">
+            <label>Width <input type="number" id="floor-width" min="30" max="400" step="10"> cm</label>
+            <label>Height <input type="number" id="floor-height" min="30" max="400" step="10"> cm</label>
+          </div>
+          <div class="control-row">
+            <label>Surface <select id="floor-background"><option value="white">White paper</option><option value="wood">Wood</option><option value="carpet">Carpet</option></select></label>
+            <label title="Snap positions to a 5 cm grid"><input type="checkbox" id="floor-snap" checked> Snap to 5 cm</label>
+          </div>
+          <input id="floor-desc" class="floor-desc" placeholder="Description (shown on the arena)" maxlength="300">
+        </div>
+        <div id="tool-palette" class="tool-palette"></div>
+        <div class="control-row tape-opts">
+          <label>Tape <select id="tape-color"></select></label>
+          <input type="color" id="tape-color-custom" value="#111111" title="Custom tape colour">
+          <label>Width <input type="number" id="tape-width" min="0.5" max="20" step="0.5" value="2.5"> cm</label>
+        </div>
+        <div class="control-row edit-actions">
+          <button type="button" id="floor-undo" title="Undo (Ctrl/Cmd+Z)">↶ Undo</button>
+          <button type="button" id="floor-redo" title="Redo (Ctrl/Cmd+Shift+Z)">↷ Redo</button>
+          <button type="button" id="floor-delete-sel" title="Remove the selected object (Delete key)">Remove selected</button>
+        </div>
+        <div id="floor-hint" class="floor-hint"></div>
+        <div id="floor-props" class="floor-props"></div>
+      </div>
+    </section>
+
+    <!-- Runs section (Milestone 3): every recorded run, its replay and sensor timeline, and the
+         gallery of saved drawings. The arena on the right shows the replay while one is open. -->
+    <section id="runs-pane" class="runs-pane" hidden>
+      <div class="pane-title">
+        <span>Runs <span id="runs-count" class="muted"></span></span>
+        <button type="button" id="runs-prune" title="Keep only the newest 50 runs of each program and delete the rest">Prune (keep last 50)</button>
+      </div>
+      <div class="control-row runs-filters">
+        <label>Program <select id="runs-filter-program"><option value="">All programs</option></select></label>
+        <label>Floor <select id="runs-filter-floor"><option value="">All floors</option></select></label>
+      </div>
+      <div id="runs-list" class="runs-list"></div>
+      <div id="run-detail" class="run-detail" hidden>
+        <div class="pane-title"><span id="run-title">Run</span><button type="button" id="run-close" title="Back to the live robot">Close</button></div>
+        <div id="run-meta" class="run-meta"></div>
+        <div id="run-verdict" class="run-verdict-box" hidden></div>
+        <div class="control-row run-controls">
+          <button type="button" id="run-play" class="primary">▶ Replay</button>
+          <input type="range" id="run-scrub" min="0" max="1" step="0.01" value="0" title="Scrub through the run">
+          <span id="run-scrub-time" class="sim-time">0.00 s</span>
+        </div>
+        <div class="run-chart-wrap"><canvas id="run-chart" class="run-chart"></canvas></div>
+        <div id="run-chart-legend" class="run-chart-legend"></div>
+        <div id="run-hover" class="run-hover"></div>
+        <div class="control-row">
+          <button type="button" id="run-save-drawing" title="Keep this run's pen drawing in the gallery">Save drawing…</button>
+          <button type="button" id="run-delete">Delete run</button>
+        </div>
+      </div>
+      <div class="pane-title gallery-title"><span>Gallery <span id="gallery-count" class="muted"></span></span></div>
+      <div id="gallery-list" class="gallery-list"></div>
+    </section>
+
+    <!-- Workbook section (Milestone 4): the BirdBrain lesson series as a checklist. Titles, numbering
+         and links only — the lesson text stays on BirdBrain's site. -->
+    <section id="workbook-pane" class="workbook-pane" hidden>
+      <div class="pane-title">
+        <span>Workbook</span>
+        <!-- Personal progress, or a class's assigned exercises (d-34) -->
+        <label class="wb-context" hidden>Show <select id="workbook-context"><option value="">My own progress</option></select></label>
+        <a class="wb-link" href="https://learn.birdbraintechnologies.com/finch/python/program/" target="_blank" rel="noopener" title="The Finch Python lessons on BirdBrain's site (new tab)">BirdBrain Finch Python lessons ↗</a>
+      </div>
+      <div class="wb-overall"><span id="workbook-overall" class="muted"></span><span class="wb-bar"><span id="workbook-bar"></span></span></div>
+      <div class="wb-note muted">For each exercise, pick the program you wrote for it (and the floor, if the lesson needs one), then tick it off. <b>Open ▶</b> puts that program in the editor on its floor; <b>lesson page ↗</b> opens the lesson on BirdBrain's site in a new tab.</div>
+      <div id="workbook-lessons" class="wb-lessons"></div>
+    </section>
+
+    <!-- Classes section (itch-14, d-32): create or join a class; a teacher's code, roster and published
+         resources; a student's teacher and the resources they can copy. public/js/classes.js -->
+    <section id="classes-pane" class="classes-pane" hidden>
+      <div class="pane-title">
+        <span>Classes</span>
+        <button type="button" id="class-new" title="A new class with you as its teacher">New class</button>
+      </div>
+      <div id="classes-anon" class="classes-anon" hidden>
+        <div class="wb-note muted">Classes need an account, so your teacher knows who you are and you can sign in from any computer.</div>
+        <button type="button" id="classes-account" class="primary">Sign in or create an account</button>
+      </div>
+      <div id="classes-body" hidden>
+        <form id="class-join" class="control-row">
+          <label>Join with a code <input type="text" id="class-code" placeholder="ABC-DEF" maxlength="8" autocomplete="off" spellcheck="false"></label>
+          <button type="submit">Join</button>
+        </form>
+        <div id="class-list" class="floor-list"></div>
+        <div id="class-detail" class="class-detail" hidden></div>
+      </div>
+    </section>
+
+    <!-- Reset a student's password (itch-14): opened from the roster by the teacher -->
+    <dialog id="reset-dialog" class="account-dialog">
+      <form class="account-form reset-form">
+        <div class="pane-title"><span class="account-title">New password for <span id="reset-name"></span></span></div>
+        <div class="account-note muted">Their signed-in browsers are signed out; they sign in again with this password.</div>
+        <label>Password <input type="password" name="password" autocomplete="new-password" minlength="6" maxlength="128" required></label>
+        <div class="account-actions">
+          <button type="submit" class="primary">Set password</button>
+          <button type="button" class="reset-cancel">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <section class="right">
+      <div class="run-bar">
+        <button type="button" id="btn-run" class="primary" title="Run (Ctrl/Cmd+Enter)">▶ Run</button>
+        <button type="button" id="btn-pause">Pause</button>
+        <button type="button" id="btn-step" title="Run one line and wait before the next — starts the program from line 1 if it is not running">Step</button>
+        <button type="button" id="btn-restart" title="Back to the start mark and run from line 1">Restart</button>
+        <button type="button" id="btn-stop" title="End the program and turn everything off">Stop</button>
+        <label>Speed <select id="speed-select"></select></label>
+        <label><input type="checkbox" id="mute"> Mute</label>
+        <span id="run-state" class="run-state" data-state="idle">Ready</span>
+        <span id="sim-time" class="sim-time">0.00 s</span>
+        <label class="floor-pick">Floor <select id="floor-select"></select></label>
+        <button type="button" id="btn-fit" title="Fit the floor in the view (or double-click the arena)">Fit</button>
+      </div>
+      <div class="arena-row">
+        <div class="arena-wrap">
+          <canvas id="arena"></canvas>
+          <div id="arena-help" class="arena-help">Drag the robot to move it · Shift-drag to rotate · Wheel to zoom · Drag the floor to pan</div>
+          <div id="floor-description" class="floor-description"></div>
+        </div>
+        <aside id="panel" class="panel">
+          <!-- Two Finches (Milestone 6): a tab per robot, shown when the floor holds two -->
+          <div class="robot-tabs" data-c="robot-tabs" hidden></div>
+          <h3>Sensors <label class="steady" title="Hide the sensors' flicker in this panel. A program still reads the noisy values, like the real Finch."><input type="checkbox" data-c="steady"> steady</label></h3>
+          <table class="readouts">
+            <tr><th>Distance</th><td data-r="distance">–</td></tr>
+            <tr><th>Light L / R</th><td data-r="light">–</td></tr>
+            <tr><th>Line L / R</th><td data-r="line">–</td></tr>
+            <tr><th>Encoders L / R</th><td data-r="encoders">–</td></tr>
+            <tr><th>Compass</th><td data-r="compass">–</td></tr>
+            <tr><th>Orientation</th><td data-r="orientation">–</td></tr>
+            <tr><th>Accel x, y, z</th><td data-r="accel">–</td></tr>
+            <tr><th>Shaking</th><td data-r="shaking">–</td></tr>
+            <tr><th>Buttons</th><td data-r="buttons">–</td></tr>
+            <tr><th>Sound</th><td data-r="sound">–</td></tr>
+            <tr><th>Temperature</th><td data-r="temperature">–</td></tr>
+            <tr><th>Motors L / R</th><td data-r="motors">–</td></tr>
+            <tr><th>Position</th><td data-r="pose">–</td></tr>
+          </table>
+
+          <h3>Touch the robot</h3>
+          <div class="control-row buttons">
+            <button type="button" data-button="A" title="Hold (or press the A key)">A</button>
+            <button type="button" data-button="B" title="Hold (or press the B key)">B</button>
+            <button type="button" data-button="Logo" title="Hold (or press the L key)">Logo</button>
+          </div>
+          <div class="control-row">
+            <label>Orientation <select data-c="orientation"></select></label>
+            <button type="button" data-c="shake" title="Shake for a second (or press S)">Shake</button>
+          </div>
+          <div class="control-row">
+            <label><input type="checkbox" data-c="hand-on"> Hand in front</label>
+            <input type="range" data-c="hand" min="0" max="60" value="15" step="1">
+            <span data-c="hand-label">off</span>
+          </div>
+          <div class="control-row">
+            <label>Sound <input type="range" data-c="sound" min="0" max="100" value="0"></label>
+            <span data-c="sound-label">0</span>
+          </div>
+          <div class="control-row">
+            <label>Temperature <input type="range" data-c="temperature" min="-10" max="45" value="22"></label>
+            <span data-c="temperature-label">22 °C</span>
+          </div>
+          <div class="control-row pose">
+            <label>x <input type="number" data-c="pose-x" step="1"></label>
+            <label>y <input type="number" data-c="pose-y" step="1"></label>
+            <label>heading <input type="number" data-c="pose-h" step="1"></label>
+          </div>
+          <div class="control-row">
+            <button type="button" data-c="rot-left" title="Rotate 15° counter-clockwise">⟲ 15°</button>
+            <button type="button" data-c="rot-right" title="Rotate 15° clockwise">⟳ 15°</button>
+            <button type="button" data-c="to-start">Place on start</button>
+          </div>
+
+          <!-- Pen (Milestone 3): a marker taped under the robot. Not part of the real Finch. -->
+          <h3>Pen <span class="sandbox-tag" title="The real Finch has no pen">sandbox only</span></h3>
+          <div class="control-row">
+            <button type="button" data-c="pen-toggle" title="Tape a marker under the robot (or call bird.penDown())">Pen down</button>
+            <input type="color" data-c="pen-color" value="#d62828" title="Ink colour (or bird.setPenColor(r, g, b))">
+            <button type="button" data-c="pen-clear" title="Wipe the ink off the floor">Clear ink</button>
+            <button type="button" data-c="pen-save" title="Keep the ink on the floor as a drawing in the gallery (Runs section)">Save drawing…</button>
+          </div>
+          <div class="pen-note">The real Finch has no pen — the lessons tape a marker to it. Here <code>bird.penDown()</code>, <code>bird.penUp()</code> and <code>bird.setPenColor(r, g, b)</code> (0–100 each) control it from code; take those lines out before downloading for the real robot. Restart wipes the ink.</div>
+        </aside>
+      </div>
+      <div id="console" class="console">
+        <div class="console-bar"><span>Console</span><button type="button" class="console-clear">Clear</button></div>
+        <div class="console-lines"></div>
+        <div class="console-prompt" hidden>
+          <label>input():</label>
+          <input type="text" autocomplete="off">
+          <button type="button">OK</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

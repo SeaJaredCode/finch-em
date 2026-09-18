@@ -141,3 +141,6 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# CatWrangler deploy config (contains AWS account/infra identifiers)
+catwrangler/
